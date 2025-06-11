@@ -47,14 +47,14 @@ const unsigned long buttonDebounceDelay = 50;
 unsigned long lastButtonPressTime = 0;
 const unsigned long buttonPressDelay = 1000; // Minimalny czas między przełączeniami
 
-String ssid = "iPhone Pawel";
-String pass = "12345678";
+String ssid = "";  //nazwa wifi
+String pass = "";  //hasło
 
 const char* apSSID = "ESP32-Setup";
 const char* apPASS = "12345678";
 
-String pushoverUser = "udf4rw1948gnfuxbbcvmqvfpx3qy1o";
-String pushoverToken = "a5f8roe5nvqvcj4f7r3wrppmpoi1ea";
+String pushoverUser = "";  //token Pushover
+String pushoverToken = "";  //token Pushover
 
 #define EVENT_LIMIT 20
 String events[EVENT_LIMIT];
