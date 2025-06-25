@@ -5,7 +5,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
-#include <Update.h>
+#include <Update.h> // Poprawione z Update.jar na Update.h
 
 Preferences preferences;
 WebServer server(80);
@@ -15,6 +15,7 @@ int sensorHighPin = 35;
 int sensorMidPin = -1;
 int relayPin = 25;
 int manualButtonPin = -1;  // GPIO0 dla przycisku BOOT
+int ledPin = 2; // Nowy pin dla diody LED
 
 bool isConfigured = false;
 bool pumpOn = false;
@@ -23,20 +24,21 @@ bool wifiConnected = false;
 bool manualMode = false;
 unsigned long manualModeStartTime = 0;
 const unsigned long manualModeTimeout = 30 * 60 * 1000;
-
 // Zmienne do zabezpieczenia przed zbyt częstym przełączaniem
 unsigned long lastPumpToggleTime = 0;
-const unsigned long minPumpToggleInterval = 30000; // 30 sekund minimalnego odstępu
+const unsigned long minPumpToggleInterval = 30000;
+// 30 sekund minimalnego odstępu
 int pumpToggleCount = 0;
-const int maxPumpTogglesPerMinute = 4; // Maksymalnie 4 przełączenia na minutę
+const int maxPumpTogglesPerMinute = 4;
+// Maksymahttps://github.com/espressif/arduino-esp32/blob/master/libraries/Update/src/Update.hlnie 4 przełączenia na minutę
 unsigned long lastMinuteCheck = 0;
-
 // Zmienne do opóźnionej reakcji na czujniki
 unsigned long lastSensorChangeTime = 0;
 bool lastLowState = false;
 bool lastHighState = false;
 bool lastMidState = false;
-const unsigned long sensorDebounceTime = 5000; // 5 sekund opóźnienia
+const unsigned long sensorDebounceTime = 5000;
+// 5 sekund opóźnienia
 
 // Zmienne dla przycisku ręcznego
 bool lastButtonState = HIGH;
@@ -47,14 +49,16 @@ const unsigned long buttonDebounceDelay = 50;
 unsigned long lastButtonPressTime = 0;
 const unsigned long buttonPressDelay = 1000; // Minimalny czas między przełączeniami
 
-String ssid = "";  //nazwa wifi
-String pass = "";  //hasło
+String ssid = "iPhone Pawel";  //nazwa wifi
+String pass = "12345678";
+//hasło
 
 const char* apSSID = "ESP32-Setup";
 const char* apPASS = "12345678";
 
 String pushoverUser = "";  //token Pushover
-String pushoverToken = "";  //token Pushover
+String pushoverToken = "";
+//token Pushover
 
 #define EVENT_LIMIT 20
 String events[EVENT_LIMIT];
@@ -62,34 +66,33 @@ int eventIndex = 0;
 
 // Watchdog timer
 hw_timer_t *watchdogTimer = NULL;
-
 void IRAM_ATTR resetModule() {
   ets_printf("Watchdog reboot\n");
   esp_restart();
 }
 
 bool canTogglePump(bool manualOverride = false) {
-  if (manualOverride) return true;  // Pomijaj zabezpieczenia dla trybu manualnego
+  if (manualOverride) return true;
+// Pomijaj zabezpieczenia dla trybu manualnego
   
   unsigned long now = millis();
-  
-  // Resetuj licznik co minutę
+// Resetuj licznik co minutę
   if (now - lastMinuteCheck > 60000) {
     pumpToggleCount = 0;
-    lastMinuteCheck = now;
+lastMinuteCheck = now;
   }
   
   // Sprawdź czy nie przekraczamy limitu przełączeń
   if (pumpToggleCount >= maxPumpTogglesPerMinute) {
     addEvent("Osiągnięto limit przełączeń pompy (4/min)");
-    sendPushover("Osiągnięto limit przełączeń pompy (4/min) - bezpiecznik");
+sendPushover("Osiągnięto limit przełączeń pompy (4/min) - bezpiecznik");
     return false;
   }
   
   // Sprawdź minimalny odstęp czasowy
   if (now - lastPumpToggleTime < minPumpToggleInterval) {
     addEvent("Zbyt częste przełączanie pompy - bezpiecznik");
-    sendPushover("Zbyt częste przełączanie pompy - bezpiecznik");
+sendPushover("Zbyt częste przełączanie pompy - bezpiecznik");
     return false;
   }
   
@@ -98,29 +101,28 @@ bool canTogglePump(bool manualOverride = false) {
 
 void addEvent(String msg) {
   Serial.println(msg);
-  events[eventIndex] = msg;
+events[eventIndex] = msg;
   eventIndex = (eventIndex + 1) % EVENT_LIMIT;
 }
 
 void sendPushover(String msg) {
   static String lastMessage = "";
-  static unsigned long lastSendTime = 0;
+static unsigned long lastSendTime = 0;
   
   // Nie wysyłaj tego samego komunikatu częściej niż co 30 sekund
   if (msg == lastMessage && millis() - lastSendTime < 30000) {
     Serial.println("[Pushover] Pominięto duplikat wiadomości: " + msg);
-    return;
+return;
   }
   
   Serial.println("[Pushover] Próba wysłania: " + msg);
-  
-  if (!wifiConnected) {
+if (!wifiConnected) {
     Serial.println("[Pushover] Błąd: Brak połączenia WiFi");
     return;
-  }
+}
   if (pushoverToken == "" || pushoverUser == "") {
     Serial.println("[Pushover] Błąd: Brak tokenu lub użytkownika");
-    return;
+return;
   }
 
   WiFiClientSecure client;
@@ -131,35 +133,33 @@ void sendPushover(String msg) {
 
   String url = "https://api.pushover.net/1/messages.json";
   Serial.println("[Pushover] Łączenie z: " + url);
-  
-  if (https.begin(client, url)) {
+if (https.begin(client, url)) {
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
     
     String postData = "token=" + pushoverToken + 
                      "&user=" + pushoverUser + 
                      "&message=" + urlEncode(msg) +
                      "&title=Zbiornik z wodą";
-    
-    Serial.println("[Pushover] Wysyłane dane: " + postData);
+Serial.println("[Pushover] Wysyłane dane: " + postData);
     
     int httpCode = https.POST(postData);
     String response = https.getString();
     
     Serial.println("[Pushover] HTTP Code: " + String(httpCode));
-    Serial.println("[Pushover] Odpowiedź: " + response);
+Serial.println("[Pushover] Odpowiedź: " + response);
     
     https.end();
     
     if (httpCode == HTTP_CODE_OK) {
       Serial.println("[Pushover] Wysłano pomyślnie!");
-      lastMessage = msg;
+lastMessage = msg;
       lastSendTime = millis();
     } else {
       Serial.println("[Pushover] Błąd wysyłania!");
-    }
+}
   } else {
     Serial.println("[Pushover] Błąd początkowania połączenia");
-  }
+}
 }
 
 String urlEncode(String str) {
@@ -167,33 +167,33 @@ String urlEncode(String str) {
   char c;
   char code0;
   char code1;
-  for (unsigned int i = 0; i < str.length(); i++) {
+for (unsigned int i = 0; i < str.length(); i++) {
     c = str.charAt(i);
-    if (c == ' ') {
+if (c == ' ') {
       encodedString += '+';
-    } else if (isalnum(c)) {
+} else if (isalnum(c)) {
       encodedString += c;
-    } else {
+} else {
       code1 = (c & 0xf) + '0';
-      if ((c & 0xf) > 9) {
+if ((c & 0xf) > 9) {
         code1 = (c & 0xf) - 10 + 'A';
-      }
+}
       c = (c >> 4) & 0xf;
       code0 = c + '0';
-      if (c > 9) {
+if (c > 9) {
         code0 = c - 10 + 'A';
-      }
+}
       encodedString += '%';
       encodedString += code0;
       encodedString += code1;
-    }
+}
   }
   return encodedString;
 }
 
 void saveConfig(int low, int high, int mid, int relay, int button, String s, String p, String token, String user) {
   preferences.begin("config", false);
-  preferences.putInt("lowPin", low);
+preferences.putInt("lowPin", low);
   preferences.putInt("highPin", high);
   preferences.putInt("midPin", mid);
   preferences.putInt("relayPin", relay);
@@ -203,22 +203,22 @@ void saveConfig(int low, int high, int mid, int relay, int button, String s, Str
   preferences.putString("pushtoken", token);
   preferences.putString("pushuser", user);
   preferences.putBool("configured", true);
-  preferences.end();
+preferences.end();
 }
 
 void loadConfig() {
   preferences.begin("config", true);
   isConfigured = preferences.getBool("configured", false);
-  if (isConfigured) {
+if (isConfigured) {
     sensorLowPin = preferences.getInt("lowPin", 34);
     sensorHighPin = preferences.getInt("highPin", 35);
     sensorMidPin = preferences.getInt("midPin", -1);
-    relayPin = preferences.getInt("relayPin", 25);
+relayPin = preferences.getInt("relayPin", 25);
     manualButtonPin = preferences.getInt("buttonPin", -1);
     ssid = preferences.getString("ssid", "");
     pass = preferences.getString("pass", "");
     pushoverToken = preferences.getString("pushtoken", "");
-    pushoverUser = preferences.getString("pushuser", "");
+pushoverUser = preferences.getString("pushuser", "");
   }
   preferences.end();
 }
@@ -226,36 +226,40 @@ void loadConfig() {
 void setupPins() {
   pinMode(sensorLowPin, INPUT);
   pinMode(sensorHighPin, INPUT);
-  if (sensorMidPin != -1) pinMode(sensorMidPin, INPUT);
+if (sensorMidPin != -1) pinMode(sensorMidPin, INPUT);
   pinMode(relayPin, OUTPUT);
   digitalWrite(relayPin, LOW);
   
+  // Konfiguracja pinu LED
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW); // Upewnij się, że dioda jest wyłączona na początku
+  
   if (manualButtonPin != -1) {
     pinMode(manualButtonPin, INPUT_PULLUP);
-    lastButtonState = digitalRead(manualButtonPin);
+lastButtonState = digitalRead(manualButtonPin);
     lastStableButtonState = lastButtonState;
     Serial.println("Przycisk ręczny skonfigurowany na pinie: " + String(manualButtonPin));
-  }
+}
 }
 
 String getStatusHTML(String content = "") {
   bool low = testMode || digitalRead(sensorLowPin) == LOW;
-  bool high = testMode || digitalRead(sensorHighPin) == LOW;
+  bool high = testMode ||
+digitalRead(sensorHighPin) == LOW;
   bool mid = (sensorMidPin != -1) ? (testMode || digitalRead(sensorMidPin) == LOW) : false;
-
-  int waterLevel = 0;
+int waterLevel = 0;
   if (high) waterLevel = 100;
   else if (mid) waterLevel = 65;
-  else if (low) waterLevel = 30;
+else if (low) waterLevel = 30;
   else waterLevel = 5;
 
   String modeBadge = "";
-  if (testMode) {
+if (testMode) {
     modeBadge = "<div class='badge test-mode'><i class='fas fa-flask'></i> Tryb testowy</div>";
-  } else if (manualMode) {
+} else if (manualMode) {
     unsigned long remaining = (manualModeStartTime + manualModeTimeout - millis()) / 60000;
-    modeBadge = "<div class='badge manual-mode'><i class='fas fa-hand-paper'></i> Tryb manualny (" + String(remaining) + " min)</div>";
-  }
+modeBadge = "<div class='badge manual-mode'><i class='fas fa-hand-paper'></i> Tryb manualny (" + String(remaining) + " min)</div>";
+}
 
   String html = R"rawliteral(
 <!DOCTYPE html>
@@ -277,7 +281,8 @@ String getStatusHTML(String content = "") {
     }
     body {
       font-family: 'Roboto', sans-serif;
-      background-color: #f5f7fa;
+      background-color: 
+)rawliteral" + String("#f5f7fa") + R"rawliteral(;
       color: #333;
       margin: 0;
       padding: 20px;
@@ -292,46 +297,46 @@ String getStatusHTML(String content = "") {
     }
     header {
       background: linear-gradient(135deg, var(--primary), var(--dark));
-      color: white;
+color: white;
       padding: 20px;
       text-align: center;
     }
     .badge {
       display: inline-block;
-      padding: 5px 10px;
+padding: 5px 10px;
       border-radius: 20px;
       font-size: 14px;
       margin-top: 10px;
       font-weight: 500;
-    }
+}
     .test-mode {
       background-color: var(--warning);
       color: white;
-    }
+}
     .manual-mode {
       background-color: var(--primary);
       color: white;
-    }
+}
     .dashboard {
       display: grid;
       grid-template-columns: 2fr 1fr;
       gap: 20px;
       padding: 20px;
-    }
+}
     @media (max-width: 768px) {
       .dashboard {
         grid-template-columns: 1fr;
-      }
+}
     }
     .tank-container {
       background: white;
       border-radius: 10px;
-      padding: 20px;
+padding: 20px;
       box-shadow: 0 3px 10px rgba(0,0,0,0.05);
     }
     .tank {
       position: relative;
-      max-width: 300px;
+max-width: 300px;
       margin: 0 auto;
       width: 100%;
       height: 300px;
@@ -339,12 +344,12 @@ String getStatusHTML(String content = "") {
       border-radius: 5px;
       overflow: hidden;
       border: 3px solid #b3e0ff;
-    }
+}
     .water {
       position: absolute;
       bottom: 0;
       width: 100%;
-      height: )rawliteral" + String(waterLevel) + R"rawliteral(%;
+height: )rawliteral" + String(waterLevel) + R"rawliteral(%;
       background: linear-gradient(to top, #3b82f6, #60a5fa);
       transition: height 0.5s ease;
     }
@@ -358,7 +363,8 @@ String getStatusHTML(String content = "") {
     }
     .sensor::after {
       content: '';
-      position: absolute;
+      position: 
+)rawliteral" + String("absolute") + R"rawliteral(;
       right: -15px;
       top: -5px;
       width: 10px;
@@ -369,59 +375,64 @@ String getStatusHTML(String content = "") {
     .sensor.high::after { background: )rawliteral" + (high ? "var(--secondary)" : "var(--danger)") + R"rawliteral(; }
     .sensor.mid { top: 35%; display: )rawliteral" + (sensorMidPin != -1 ? "block" : "none") + R"rawliteral(; }
     .sensor.mid::after { background: )rawliteral" + (mid ? "var(--secondary)" : "var(--danger)") + R"rawliteral(; }
+ 
     .sensor.low { top: 70%; }
-    .sensor.low::after { background: )rawliteral" + (low ? "var(--secondary)" : "var(--danger)") + R"rawliteral(; }
+    .sensor.low::after { background: )rawliteral" + (low ?
+"var(--secondary)" : "var(--danger)") + R"rawliteral(;
+}
     .sensor-label {
       position: absolute;
       right: -80px;
       top: -10px;
       font-size: 14px;
-      font-weight: 500;
+font-weight: 500;
       white-space: nowrap;
     }
     .water-percentage {
       position: absolute;
       top: 50%;
-      left: 50%;
+left: 50%;
       transform: translate(-50%, -50%);
       font-size: 24px;
       font-weight: 700;
       color: rgba(255,255,255,0.8);
       text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
+}
     .status-indicator {
       display: flex;
       align-items: center;
       margin-bottom: 10px;
-    }
+}
     .status-dot {
       width: 12px;
       height: 12px;
       border-radius: 50%;
       margin-right: 10px;
-    }
+}
     .status-on { background-color: var(--secondary); }
-    .status-off { background-color: var(--danger); }
+    .status-off { background-color: var(--danger);
+}
     .nav {
       display: flex;
       justify-content: space-around;
       background: var(--light);
       padding: 15px;
-      border-radius: 10px;
+border-radius: 10px;
       margin-top: 20px;
     }
     .nav a {
       color: var(--dark);
       text-decoration: none;
-      font-weight: 500;
+font-weight: 500;
       transition: color 0.3s;
     }
-    .nav a:hover { color: var(--primary); }
+    .nav a:hover { color: var(--primary);
+}
     .control-panel {
       background: white;
       border-radius: 10px;
       padding: 20px;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+box-shadow: 0 3px 10px rgba(0,0,0,0.05);
     }
   </style>
 </head>
@@ -437,16 +448,19 @@ String getStatusHTML(String content = "") {
         <h2><i class="fas fa-water"></i> Wizualizacja Zbiornika</h2>
         <div class="tank">
           <div class="water">
-            <div class="water-percentage">)rawliteral" + String(waterLevel) + R"rawliteral(%</div>
+            <div class="water-percentage">)rawliteral" + String(waterLevel) +
+R"rawliteral(%</div>
           </div>
           <div class="sensor high">
             <span class="sensor-label">Górny: )rawliteral" + (high ? "Zanurzony" : "Suchy") + R"rawliteral(</span>
           </div>
           <div class="sensor mid">
             <span class="sensor-label">Środkowy: )rawliteral" + (sensorMidPin != -1 ? (mid ? "Zanurzony" : "Suchy") : "Nieaktywny") + R"rawliteral(</span>
-          </div>
+      
+     </div>
           <div class="sensor low">
-            <span class="sensor-label">Dolny: )rawliteral" + (low ? "Zanurzony" : "Suchy") + R"rawliteral(</span>
+            <span class="sensor-label">Dolny: )rawliteral" + (low ?
+"var(--secondary)" : "var(--danger)") + R"rawliteral(</span>
           </div>
         </div>
       </div>
@@ -456,23 +470,27 @@ String getStatusHTML(String content = "") {
         <div class="control-panel" style="margin-top:20px;">
           <h3><i class="fas fa-info-circle"></i> Status Systemu</h3>
           <div class="status-indicator">
-            <div class="status-dot )rawliteral" + (pumpOn ? "status-on" : "status-off") + R"rawliteral("></div>
+            <div class="status-dot )rawliteral" + (pumpOn ? "status-on"
+: "status-off") + R"rawliteral("></div>
             <span>Pompa: )rawliteral" + (pumpOn ? "WŁĄCZONA" : "WYŁĄCZONA") + R"rawliteral(</span>
           </div>
           <div class="status-indicator">
             <div class="status-dot )rawliteral" + (wifiConnected ? "status-on" : "status-off") + R"rawliteral("></div>
             <span>WiFi: )rawliteral" + (wifiConnected ? "Podłączone" : "Rozłączone") + R"rawliteral(</span>
           </div>
-          <div class="status-indicator">
+  
+         <div class="status-indicator">
             <div class="status-dot )rawliteral" + ((pushoverToken != "" && pushoverUser != "") ? "status-on" : "status-off") + R"rawliteral("></div>
-            <span>Powiadomienia: )rawliteral" + ((pushoverToken != "" && pushoverUser != "") ? "Aktywne" : "Nieaktywne") + R"rawliteral(</span>
+            <span>Powiadomienia: )rawliteral" + ((pushoverToken != "" && pushoverUser != "") ?
+"Aktywne" : "Nieaktywne") + R"rawliteral(</span>
           </div>
           <div class="status-indicator">
             <div class="status-dot )rawliteral" + (manualButtonPin != -1 ? "status-on" : "status-off") + R"rawliteral("></div>
             <span>Przycisk ręczny: )rawliteral" + (manualButtonPin != -1 ? "Aktywny (GPIO " + String(manualButtonPin) + ")" : "Nieaktywny") + R"rawliteral(</span>
           </div>
         </div>
-      </div>
+   
+    </div>
     </div>
 
     <div class="nav">
@@ -485,8 +503,7 @@ String getStatusHTML(String content = "") {
 </body>
 </html>
 )rawliteral";
-
-  return html;
+return html;
 }
 
 void handleStatus() {
@@ -495,9 +512,9 @@ void handleStatus() {
 
 void handleLog() {
   String content = "<div class='control-panel'><h3><i class='fas fa-history'></i> Historia Zdarzeń</h3><ul style='padding-left:20px;'>";
-  for (int i = 0; i < EVENT_LIMIT; i++) {
+for (int i = 0; i < EVENT_LIMIT; i++) {
     int idx = (eventIndex + i) % EVENT_LIMIT;
-    if (events[idx] != "") content += "<li>" + events[idx] + "</li>";
+if (events[idx] != "") content += "<li>" + events[idx] + "</li>";
   }
   content += "</ul></div>";
   server.send(200, "text/html; charset=utf-8", getStatusHTML(content));
@@ -508,35 +525,35 @@ void handleManual() {
     if (server.hasArg("toggle")) {
       if (canTogglePump(true)) {  // Użyj manualOverride=true dla przełączania ręcznego
         manualMode = true;
-        manualModeStartTime = millis();
+manualModeStartTime = millis();
         pumpOn = !pumpOn;
         digitalWrite(relayPin, pumpOn ? HIGH : LOW);
         lastPumpToggleTime = millis();
         pumpToggleCount++;
-        addEvent(String("Ręczne sterowanie POMPA – ") + (pumpOn ? "WŁĄCZONA" : "WYŁĄCZONA"));
-        sendPushover(String("Ręczne sterowanie POMPA: ") + (pumpOn ? "włączono" : "wyłączono"));
+addEvent(String("Ręczne sterowanie POMPA – ") + (pumpOn ? "WŁĄCZONA" : "WYŁĄCZONA"));
+sendPushover(String("Ręczne sterowanie POMPA: ") + (pumpOn ? "włączono" : "wyłączono"));
       }
       server.sendHeader("Location", "/manual");
       server.send(303);
       return;
-    } 
+} 
     else if (server.hasArg("test")) {
       testMode = !testMode;
-      if (testMode) {
+if (testMode) {
         manualMode = true;
         manualModeStartTime = millis();
-      } else {
+} else {
         manualMode = false;
-      }
+}
       addEvent(testMode ? "Włączono tryb testowy" : "Wyłączono tryb testowy");
       server.sendHeader("Location", "/manual");
       server.send(303);
       return;
-    }
+}
     else if (server.hasArg("auto")) {
       manualMode = false;
       addEvent("Przywrócono sterowanie automatyczne");
-      server.sendHeader("Location", "/manual");
+server.sendHeader("Location", "/manual");
       server.send(303);
       return;
     }
@@ -545,33 +562,34 @@ void handleManual() {
   String content = "";
   content += "<div class=\"control-panel\">";
   content += "<div class=\"control-group\">";
-  content += "<h3><i class=\"fas fa-cog\"></i> Sterowanie Pompą</h3>";
+content += "<h3><i class=\"fas fa-cog\"></i> Sterowanie Pompą</h3>";
   content += "<form method=\"POST\" action=\"/manual\" style=\"margin: 0;\">";
   content += "<input type=\"hidden\" name=\"toggle\" value=\"1\">";
-  content += "<button type=\"submit\" class=\"btn btn-pump\">";
+content += "<button type=\"submit\" class=\"btn btn-pump\">";
   content += "<i class=\"fas fa-power-off\"></i> ";
-  content += pumpOn ? "WYŁĄCZ POMPĘ" : "WŁĄCZ POMPĘ";
+  content += pumpOn ?
+"WYŁĄCZ POMPĘ" : "WŁĄCZ POMPĘ";
   content += "</button></form></div>";
 
   content += "<div class=\"control-group\">";
   content += "<h3><i class=\"fas fa-vial\"></i> Tryb Testowy</h3>";
-  content += "<form method=\"POST\" action=\"/manual\" style=\"margin: 0;\">";
+content += "<form method=\"POST\" action=\"/manual\" style=\"margin: 0;\">";
   content += "<button type=\"submit\" name=\"test\" class=\"btn ";
   content += testMode ? "btn-danger" : "btn-primary";
   content += "\"><i class=\"fas fa-flask\"></i> ";
-  content += testMode ? "Wyłącz Tryb Testowy" : "Włącz Tryb Testowy";
+content += testMode ? "Wyłącz Tryb Testowy" : "Włącz Tryb Testowy";
   content += "</button></form></div>";
-
-  if (manualMode && !testMode) {
+if (manualMode && !testMode) {
     content += "<div class='control-group'>";
     content += "<h3><i class='fas fa-robot'></i> Sterowanie Automatyczne</h3>";
-    content += "<form method='POST' action='/manual' style='margin: 0;'>";
+content += "<form method='POST' action='/manual' style='margin: 0;'>";
     content += "<button type='submit' name='auto' class='btn btn-secondary'>";
-    content += "<i class='fas fa-redo'></i> Przywróć Automat";
+content += "<i class='fas fa-redo'></i> Przywróć Automat";
     content += "</button></form></div>";
   }
 
-  content += "</div>"; // .control-panel
+  content += "</div>";
+// .control-panel
 
   server.send(200, "text/html; charset=utf-8", getStatusHTML(content));
 }
@@ -589,26 +607,26 @@ void handleConfigForm() {
       <label>SSID Wi-Fi:</label><br><input name='ssid'><br><br>
       <label>Hasło Wi-Fi:</label><br><input name='pass'><br><br>
       <label>Token Pushover:</label><br><input name='token'><br><br>
-      <label>Użytkownik Pushover:</label><br><input name='user'><br><br>
+  
+     <label>Użytkownik Pushover:</label><br><input name='user'><br><br>
       <input type='submit' class='btn btn-primary' value='Zapisz'>
     </form>
   </div>
   )rawliteral";
-
-  server.send(200, "text/html; charset=utf-8", getStatusHTML(content));
+server.send(200, "text/html; charset=utf-8", getStatusHTML(content));
 }
 
 void handleSave() {
   int low = server.arg("low").toInt();
   int high = server.arg("high").toInt();
-  int mid = server.hasArg("mid") ? server.arg("mid").toInt() : -1;
+int mid = server.hasArg("mid") ? server.arg("mid").toInt() : -1;
   int relay = server.arg("relay").toInt();
   int button = server.hasArg("button") ? server.arg("button").toInt() : -1;
-  String s = server.arg("ssid");
+String s = server.arg("ssid");
   String p = server.arg("pass");
   String token = server.arg("token");
   String user = server.arg("user");
-  saveConfig(low, high, mid, relay, button, s, p, token, user);
+saveConfig(low, high, mid, relay, button, s, p, token, user);
   server.send(200, "text/html; charset=utf-8", "<h3>Zapisano konfigurację. Restart...</h3>");
   delay(2000);
   ESP.restart();
@@ -621,29 +639,45 @@ void setup() {
   client.setInsecure();
   loadConfig();
   server.on("/manual", HTTP_POST, handleManual);
-
-  // Inicjalizacja watchdoga
+// Inicjalizacja watchdoga
   watchdogTimer = timerBegin(0);
   timerAttachInterrupt(watchdogTimer, &resetModule);
   timerAlarm(watchdogTimer, 5000000, false, 0);
-  
-  if (!isConfigured) {
+if (!isConfigured) {
+    Serial.println("Tryb konfiguracji - brak zapisanych ustawień.");
+    Serial.println("Uruchamiam AP: " + String(apSSID) + " z hasłem: " + String(apPASS));
     WiFi.softAP(apSSID, apPASS);
+    Serial.print("Adres IP AP: ");
+    Serial.println(WiFi.softAPIP());
     server.on("/", handleConfigForm);
     server.on("/save", handleSave);
     server.begin();
     return;
   }
 
+  Serial.println("Wczytano konfigurację.");
+  Serial.println("Próbuję połączyć się z WiFi SSID: " + ssid);
   WiFi.begin(ssid.c_str(), pass.c_str());
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) delay(500);
-  if (WiFi.status() == WL_CONNECTED) {
+unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+if (WiFi.status() == WL_CONNECTED) {
     wifiConnected = true;
+    Serial.println("Połączono z Wi-Fi!");
+    Serial.print("Adres IP: ");
+    Serial.println(WiFi.localIP());
     addEvent("Połączono z Wi-Fi: " + WiFi.localIP().toString());
-    sendPushover("Urządzenie online: " + WiFi.localIP().toString());
+sendPushover("Urządzenie online: " + WiFi.localIP().toString());
+    digitalWrite(ledPin, HIGH); // Dioda świeci ciągle gdy online
   } else {
+    Serial.println("Nie udało się połączyć z Wi-Fi. Uruchamiam tryb offline (AP).");
     WiFi.softAP("ESP32-WaterMonitor", "pompa123");
+    Serial.print("Adres IP AP (tryb offline): ");
+    Serial.println(WiFi.softAPIP());
     addEvent("Tryb offline - AP");
   }
 
@@ -654,8 +688,10 @@ void setup() {
   server.on("/manual", handleManual);
   server.on("/log", handleLog);
   server.begin();
+  Serial.println("Serwer WWW uruchomiony.");
 
   MDNS.begin("esp32");
+Serial.println("mDNS uruchomiony jako 'esp32.local'");
   server.on("/update", HTTP_POST, []() {
     server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
     ESP.restart();
@@ -665,6 +701,7 @@ void setup() {
     else if (upload.status == UPLOAD_FILE_WRITE) Update.write(upload.buf, upload.currentSize);
     else if (upload.status == UPLOAD_FILE_END) Update.end(true);
   });
+  Serial.println("OTA Update handler skonfigurowany na /update.");
 }
 
 void loop() {
@@ -672,18 +709,34 @@ void loop() {
 
   server.handleClient();
   static unsigned long lastWifiCheck = 0;
-  
-  // Sprawdzaj połączenie WiFi co 60 sekund
+  static unsigned long lastLedToggle = 0;
+  const unsigned long ledBlinkInterval = 500; // Miganie co 500 ms w trybie offline
+
+  // Sprawdzanie i sygnalizacja stanu WiFi za pomocą diody LED
+  if (wifiConnected) {
+    digitalWrite(ledPin, HIGH); // Dioda świeci ciągle gdy online
+  } else {
+    // Miganie diodą LED, gdy urządzenie jest włączone, ale offline
+    if (millis() - lastLedToggle > ledBlinkInterval) {
+      lastLedToggle = millis();
+      digitalWrite(ledPin, !digitalRead(ledPin)); // Przełącz stan diody
+    }
+  }
+
+// Sprawdzaj połączenie WiFi co 60 sekund
   if (millis() - lastWifiCheck > 60000) {
     lastWifiCheck = millis();
-    bool wasConnected = wifiConnected;
+bool wasConnected = wifiConnected;
     wifiConnected = (WiFi.status() == WL_CONNECTED);
     
     if (wifiConnected && !wasConnected) {
+      Serial.println("Ponownie połączono z WiFi. Adres IP: " + WiFi.localIP().toString());
       addEvent("Ponownie połączono z WiFi");
-      sendPushover("Urządzenie ponownie online");
+sendPushover("Urządzenie ponownie online");
+      digitalWrite(ledPin, HIGH); // Dioda świeci ciągle gdy online
     }
     else if (!wifiConnected && wasConnected) {
+      Serial.println("Utracono połączenie WiFi.");
       addEvent("Utracono połączenie WiFi");
     }
   }
@@ -691,81 +744,97 @@ void loop() {
   // Sprawdź czy minął czas trybu manualnego
   if (manualMode && !testMode && (millis() - manualModeStartTime > manualModeTimeout)) {
     manualMode = false;
-    addEvent("Automatyczne wyłączenie trybu manualnego po 30 minutach");
+Serial.println("Automatyczne wyłączenie trybu manualnego po 30 minutach.");
+addEvent("Automatyczne wyłączenie trybu manualnego po 30 minutach");
   }
 
   // Obsługa przycisku ręcznego (jeśli skonfigurowany)
   if (manualButtonPin != -1) {
     // Odczytaj aktualny stan przycisku z debouncingiem
     bool reading = digitalRead(manualButtonPin);
-    
-    if (reading != lastButtonState) {
+if (reading != lastButtonState) {
       lastButtonDebounceTime = millis();
-    }
+}
     
     if ((millis() - lastButtonDebounceTime) > buttonDebounceDelay) {
       // Stan przycisku jest stabilny
       if (reading != buttonState) {
         buttonState = reading;
-        
-        // Sprawdź czy przycisk został naciśnięty (przejście z HIGH na LOW)
+// Sprawdź czy przycisk został naciśnięty (przejście z HIGH na LOW)
         if (buttonState == LOW && lastStableButtonState == HIGH) {
           // Sprawdź czy minął minimalny czas od ostatniego naciśnięcia
           if (millis() - lastButtonPressTime > buttonPressDelay) {
             lastButtonPressTime = millis();
-            
-            // Przełącz pompę (pomijając zabezpieczenia czasowe)
+// Przełącz pompę (pomijając zabezpieczenia czasowe)
             if (canTogglePump(true)) {
               manualMode = true;
-              manualModeStartTime = millis();
+manualModeStartTime = millis();
               pumpOn = !pumpOn;
               digitalWrite(relayPin, pumpOn ? HIGH : LOW);
               lastPumpToggleTime = millis();
-              addEvent(String("Przycisk BOOT POMPA – ") + (pumpOn ? "WŁĄCZONA" : "WYŁĄCZONA"));
-              sendPushover(String("Przycisk BOOT POMPA: ") + (pumpOn ? "włączono" : "wyłączono"));
-            }
+Serial.println(String("Przycisk BOOT aktywowany. Pompa: ") + (pumpOn ? "WŁĄCZONA" : "WYŁĄCZONA"));
+addEvent(String("Przycisk BOOT POMPA – ") + (pumpOn ? "WŁĄCZONA" : "WYŁĄCZONA"));
+sendPushover(String("Przycisk BOOT POMPA: ") + (pumpOn ? "włączono" : "wyłączono"));
+}
+          } else {
+            Serial.println("Przycisk BOOT - zignorowano zbyt szybkie naciśnięcie.");
           }
         }
       }
     }
     
     lastButtonState = reading;
-    lastStableButtonState = buttonState;
+lastStableButtonState = buttonState;
   }
 
   // Odczytaj aktualne stany czujników
   bool currentLow = digitalRead(sensorLowPin) == LOW;
-  bool currentHigh = digitalRead(sensorHighPin) == LOW;
+bool currentHigh = digitalRead(sensorHighPin) == LOW;
   bool currentMid = (sensorMidPin != -1) ? (digitalRead(sensorMidPin) == LOW) : false;
+Serial.print("Stany czujników: ");
+Serial.print("LOW="); Serial.print(currentLow);
+Serial.print(", MID="); Serial.print(currentMid);
+Serial.print(", HIGH="); Serial.println(currentHigh);
 
-  // Sprawdź czy stan czujników się zmienił
+// Sprawdź czy stan czujników się zmienił
   if (currentLow != lastLowState || currentHigh != lastHighState || currentMid != lastMidState) {
     lastSensorChangeTime = millis();
-    lastLowState = currentLow;
+lastLowState = currentLow;
     lastHighState = currentHigh;
     lastMidState = currentMid;
+    Serial.println("Wykryto zmianę stanu czujników. Czekam na stabilizację...");
   }
 
   // Automatyczne sterowanie działa tylko gdy nie jesteśmy w trybie manualnym/testowym
   if (!manualMode && !testMode) {
     // Sprawdź czy minęło wystarczająco czasu od ostatniej zmiany stanu czujników
     if (millis() - lastSensorChangeTime > sensorDebounceTime) {
+      Serial.println("Czujniki stabilne, sprawdzam automatyczne sterowanie.");
       if (currentHigh && pumpOn && canTogglePump()) {
         digitalWrite(relayPin, LOW);
-        pumpOn = false;
+pumpOn = false;
         lastPumpToggleTime = millis();
         pumpToggleCount++;
-        addEvent("Automatyczne wyłączenie pompy (górny czujnik)");
-        sendPushover("Pompa została automatycznie wyłączona - zbiornik pełny");
+Serial.println("Automatyczne wyłączenie pompy: Górny czujnik zanurzony.");
+addEvent("Automatyczne wyłączenie pompy (górny czujnik)");
+sendPushover("Pompa została automatycznie wyłączona - zbiornik pełny");
       }
       else if (!currentLow && !pumpOn && canTogglePump()) {
         digitalWrite(relayPin, HIGH);
-        pumpOn = true;
+pumpOn = true;
         lastPumpToggleTime = millis();
         pumpToggleCount++;
-        addEvent("Automatyczne włączenie pompy (brak wody)");
-        sendPushover("Pompa została automatycznie włączona - niski poziom wody");
+Serial.println("Automatyczne włączenie pompy: Niski poziom wody (dolny czujnik suchy).");
+addEvent("Automatyczne włączenie pompy (brak wody)");
+sendPushover("Pompa została automatycznie włączona - niski poziom wody");
+      } else {
+        Serial.println("Warunki dla automatycznego sterowania nie zostały spełnione lub pompa jest już w odpowiednim stanie.");
       }
+    } else {
+      Serial.println("Debounce czujników w toku...");
     }
+  } else {
+    Serial.println("Tryb manualny/testowy aktywny - automatyczne sterowanie wyłączone.");
   }
+  delay(100); // Krótkie opóźnienie, aby uniknąć przeciążenia
 }
