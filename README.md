@@ -1,5 +1,7 @@
 ESP32 Water Monitor (ESP32-C6) – Sterownik poziomu cieczy
+
 Opis projektu
+
 Program przeznaczony dla mikrokontrolera ESP32-C6 sterującego poziomem wody w zbiorniku z obsługą przekaźnika, wizualizacją WWW, powiadomieniami i trybem awaryjnym.
 
 Najważniejsze funkcje
@@ -29,14 +31,3 @@ Automatyczny reconnect WiFi – sterownik samodzielnie odzyskuje połączenie be
 
 Krótko o działaniu
 Urządzenie na bieżąco monitoruje poziom cieczy w zbiorniku przy pomocy czujników. Włącza lub wyłącza przekaźnik (pompę) zgodnie z aktualnym stanem oraz wybranym trybem pracy. Stan systemu, historia oraz konfiguracja dostępne są przez stronę WWW. O wszystkich istotnych zmianach informuje użytkownika przez powiadomienia PUSH (Pushover). System zapewnia ciągłość pracy i ochronę przed błędami dzięki watchdogowi i mechanizmom bezpieczeństwa.
-
-Wymagania
-Płytka ESP32-C6 (np. z przekaźnikiem)
-
-Czujniki poziomu cieczy (min. 2: dolny, górny)
-
-Przekaźnik (sterowanie pompą)
-
-Zasilanie zgodne z płytką (najczęściej 7–60V VIN dla przekaźników)
-
-Dostęp do sieci WiFi (opcjonalnie – tryb offline/AP)
