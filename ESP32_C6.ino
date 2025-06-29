@@ -415,6 +415,17 @@ font-weight: 500;
       padding: 20px;
 box-shadow: 0 3px 10px rgba(0,0,0,0.05);
     }
+    #footer-brand {
+      position: fixed;
+      right: 18px;
+      bottom: 10px;
+      z-index: 999;
+      font-size: 0.9em;
+      color: #000;
+      opacity: 0.9;
+      pointer-events: none;
+      font-family: inherit;
+    }
   </style>
 </head>
 <body>
@@ -480,6 +491,9 @@ R"rawliteral(%</div>
       <a href="/config"><i class="fas fa-sliders-h"></i> Konfiguracja</a>
       <a href="/log"><i class="fas fa-history"></i> Historia Zdarzeń</a>
     </div>
+  </div>
+  <div id="footer-brand">
+    2025 PaweMed v1.1
   </div>
 </body>
 </html>
